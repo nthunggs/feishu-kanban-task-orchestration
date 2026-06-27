@@ -83,7 +83,7 @@ def list_feishu_records():
     r = run([
         "lark-cli", "base", "+record-list",
         "--base-token", BASE_TOKEN, "--table-id", TABLE_ID,
-        "--as", WRITE_IDENTITY, "--limit", "200",
+        "--as", WRITE_IDENTITY, "--limit", "200", "--format", "json",
     ])
     if not r.get("ok"): return {}
     data   = r.get("data", {})
@@ -177,6 +177,19 @@ def main():
                     summary = result.get("summary") or ""
                 elif isinstance(result, str):
                     summary = result
+
+                # hermes v1 兼容：`kanban list --json` 的 result 常为 null，
+                # 真正的总结在 `kanban show` 的 latest_summary / result 里。
+                if not summary or not meta:
+                    full = show_kanban_task(kid)
+                    if isinstance(full, dict):
+                        fresult = (full.get("task") or {}).get("result") or full.get("result")
+                        if isinstance(fresult, dict):
+                            meta    = meta or (fresult.get("metadata") or {})
+                            summary = summary or (fresult.get("summary") or "")
+                        elif isinstance(fresult, str):
+                            summary = summary or fresult
+                        summary = summary or (full.get("latest_summary") or "")
 
                 is_revision = bool(meta.get("is_revision"))
                 digest = summary[:1500] if summary else f"kanban {kid} 已完成"

@@ -14,6 +14,10 @@ feishu:
   table_id:   "REPLACE_TABLE_ID"
   # 接收通知的 chat_id（DM 里通过 lark-cli im +chat-list 查到 oc_xxx）
   chat_id:    "REPLACE_CHAT_ID"
+  # 实时事件 EventKey（lark-cli v1.0.19+ 用 `event consume <key>`）。
+  # 跑 `lark-cli event list` 确认你的 app 实际暴露的 key 名；
+  # 上游叫 drive.file.bitable_record_changed_v1，不同 app/版本可能略有差异。
+  event_key:  "drive.file.bitable_record_changed_v1"
 
 # 字段 ID 映射（建表后跑 lark-cli api GET /open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/fields 抓取后填入）
 field_ids:

@@ -40,7 +40,7 @@
 
 3. **orchestrator 收到通知**
    - 看 DM 里的任务概要 → 查飞书表全文
-   - 决定 spawn 哪个 worker → `hermes kanban add` 创建 kanban 任务
+   - 决定 spawn 哪个 worker → `hermes kanban create` 创建 kanban 任务（lark-cli/hermes v1：add 已改名 create）
    - 把 kanban id 写到飞书表「Kanban链」字段
 
 4. **worker 跑任务**

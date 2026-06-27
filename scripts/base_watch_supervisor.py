@@ -25,6 +25,8 @@ BASE_TOKEN = CFG["feishu"]["base_token"]
 TMUX_NAME  = CFG["paths"]["tmux_name"]
 LISTENER   = CFG["paths"]["listener"]
 LOG_FILE   = CFG["paths"]["log_file"]
+# 实时事件 EventKey（lark-cli v1.0.19+ `event consume <key>`）
+EVENT_KEY  = CFG["feishu"].get("event_key", "drive.file.bitable_record_changed_v1")
 ENV        = env_with_overrides()
 
 
@@ -64,8 +66,8 @@ def start_tmux():
         pass
 
     inner = (
-        f"LARK_CLI_NO_PROXY=1 lark-cli event +subscribe "
-        f"--as bot --event-types drive.file.bitable_record_changed_v1 2>&1 "
+        f"LARK_CLI_NO_PROXY=1 lark-cli event consume {EVENT_KEY} "
+        f"--as bot --quiet 2>&1 "
         f"| tee -a {LOG_FILE} "
         f"| python3 {LISTENER}"
     )
