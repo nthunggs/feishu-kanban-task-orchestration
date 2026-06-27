@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _config import load_config, env_with_overrides
+from _config import load_config, env_with_overrides, get_security
 
 CFG       = load_config()
 BASE_TOKEN  = CFG["feishu"]["base_token"]
@@ -26,6 +26,10 @@ TABLE_ID    = CFG["feishu"]["table_id"]
 FEISHU_CHAT = CFG["feishu"]["chat_id"]
 SEEN_FILE   = Path(CFG["paths"]["seen_file"])
 ENV         = env_with_overrides()
+
+SEC               = get_security()
+WRITE_IDENTITY    = SEC["write_identity"]        # "bot" 推荐 / "user"
+ALLOWED_OPERATORS = set(SEC["allowed_operators"]) # 空 = 不限制（仅告警）
 
 
 def log(msg):
@@ -80,7 +84,7 @@ def summarize(fields):
 def send_feishu(text):
     cmd = ["lark-cli", "api", "POST", "/open-apis/im/v1/messages",
            "--params", json.dumps({"receive_id_type": "chat_id"}),
-           "--as", "user",
+           "--as", WRITE_IDENTITY,
            "--data", json.dumps({
                "receive_id": FEISHU_CHAT,
                "msg_type": "text",
@@ -123,6 +127,13 @@ def handle_event(ev):
         return None
 
     operator = body.get("operator_id", {}).get("user_id", "?")
+
+    # 安全门：operator 不在白名单 → 只记日志，不通知 orchestrator、不触发 spawn。
+    # 防「任意人在表里打字注入指令」。空白名单 = 不限制（兼容初始调试）。
+    if ALLOWED_OPERATORS and operator not in ALLOWED_OPERATORS:
+        log(f"⚠️ blocked: operator {operator} not in allowed_operators; ignoring event")
+        return None
+
     lines = []
 
     for act in actions:

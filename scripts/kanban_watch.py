@@ -23,13 +23,15 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _config import load_config
+from _config import load_config, get_security
 
 CFG        = load_config()
 TENANT     = CFG["kanban"]["tenant"]
 BASE_TOKEN = CFG["feishu"]["base_token"]
 TABLE_ID   = CFG["feishu"]["table_id"]
 STATE_FILE = Path(CFG["paths"]["state_file"])
+
+WRITE_IDENTITY = get_security()["write_identity"]   # "bot" 推荐 / "user"
 
 KANBAN_ID_RE = re.compile(r"\bt_[0-9a-f]{8}\b")
 HM  = datetime.now().strftime("%H:%M")
@@ -81,7 +83,7 @@ def list_feishu_records():
     r = run([
         "lark-cli", "base", "+record-list",
         "--base-token", BASE_TOKEN, "--table-id", TABLE_ID,
-        "--as", "user", "--limit", "200",
+        "--as", WRITE_IDENTITY, "--limit", "200",
     ])
     if not r.get("ok"): return {}
     data   = r.get("data", {})
@@ -101,7 +103,7 @@ def update_feishu(rid, fields: dict) -> bool:
     r = run([
         "lark-cli", "base", "+record-upsert",
         "--base-token", BASE_TOKEN, "--table-id", TABLE_ID,
-        "--record-id", rid, "--as", "user",
+        "--record-id", rid, "--as", WRITE_IDENTITY,
         "--json", json.dumps(fields, ensure_ascii=False),
     ])
     return r.get("ok", False)

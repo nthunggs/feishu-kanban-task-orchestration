@@ -1,6 +1,10 @@
 # ────────────────────────────────────────────────────────────────
-# feishu-kanban-task-orchestration 配置文件
+# feishu-kanban-task-orchestration 配置文件 (macOS + 多 profile team 适配版)
 # 把本文件复制为 config.yaml 后填入实际值，不要把真实值提交回 git
+#
+# macOS adaptation by nthunggs:
+#   - 所有路径默认指向 ~ (自动展开为 /Users/<you>)
+#   - 新增 security 段：写回身份、操作白名单、spawn 审批门
 # ────────────────────────────────────────────────────────────────
 
 feishu:
@@ -38,16 +42,42 @@ kanban:
   # Hermes kanban 的 tenant 名（hermes kanban list --tenant <这个>）
   tenant: "default"
 
+# ────────────────────────────────────────────────────────────────
+# 安全控制 (macOS 适配版新增)
+# ────────────────────────────────────────────────────────────────
+security:
+  # 写回飞书表用哪个身份。
+  #   "bot"  = 应用机器人（推荐）：bot 只是单张表的协作者，权限最小化，
+  #            不会用你的个人账号全权写任何表。
+  #   "user" = 你的个人身份（原始默认）：拥有你账号的全部权限，风险更高。
+  # 推荐生产用 "bot"，把 bot 加为目标表协作者即可。
+  write_identity: "bot"
+
+  # 允许触发编排的操作者白名单（飞书 open_id / user_id）。
+  # 监听器收到 record 变更时，若 operator 不在白名单内，只记日志、
+  # 不发 DM 给 orchestrator、不触发 spawn。空列表 = 不限制（仅记日志告警）。
+  # 防止「有人在表里打字注入指令」的攻击面。
+  allowed_operators: []
+
+  # spawn 审批门：true = orchestrator 收到新任务后必须人工确认才 spawn worker，
+  # false = 自动 spawn（原始行为）。建议初期 true，跑顺了再关。
+  require_spawn_approval: true
+
+  # orchestrator 把「表里的文字」视为数据而非系统指令。
+  # 此开关只是提醒，真正的隔离在 orchestrator 的 SOUL/prompt 里实现：
+  # 任务描述中的任何「忽略指令 / 删除 / 改配置」字样都当作普通文本，不执行。
+  treat_table_text_as_data: true
+
 paths:
-  # 状态去重缓存
-  seen_file:   "/root/.hermes/cron/state/base_event_seen.json"
-  state_file:  "/root/.hermes/cron/state/kanban_watch_state.json"
+  # 状态去重缓存（~ 自动展开为 /Users/<you>）
+  seen_file:   "~/.hermes/cron/state/base_event_seen.json"
+  state_file:  "~/.hermes/cron/state/kanban_watch_state.json"
   # 实时事件流日志（tee 写到这里）
-  log_file:    "/tmp/larkwatch.log"
+  log_file:    "~/.hermes/cron/state/larkwatch.log"
   # tmux 会话名
   tmux_name:   "larkwatch"
-  # 事件监听脚本绝对路径（supervisor 启动时 pipe 到它）
-  listener:   "/root/.hermes/scripts/base_event_listener.py"
+  # 事件监听脚本绝对路径（supervisor 启动时 pipe 到它，~ 会自动展开）
+  listener:   "~/.hermes/scripts/base_event_listener.py"
 
 env:
   # lark-cli 在代理环境下的稳定开关

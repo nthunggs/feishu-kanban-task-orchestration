@@ -4,6 +4,10 @@ Real-time **Feishu (Lark) bitable** + **Hermes Kanban** task orchestration syste
 
 A Skill package for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
+> **🍴 nthunggs fork — macOS + 多 profile team 适配版**
+> 本 fork 在上游基础上做了 macOS 适配与安全加固：路径自动展开 `~`、写回改用 bot 最小权限身份、
+> 新增操作者白名单与 spawn 审批门。详见 **[docs/macos-team-setup.md](docs/macos-team-setup.md)**。
+
 ## 是什么
 
 把"飞书多维表格当任务面板，Hermes Kanban 当任务队列，多个 worker profile 当执行者"组装成一套自动化流水线：
