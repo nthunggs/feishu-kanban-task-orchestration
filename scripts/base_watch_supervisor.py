@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-飞书任务表监听 - supervisor（cron 每分钟跑一次）
+Giám sát lắng nghe bảng task Lark - supervisor (cron chạy mỗi phút)
 
-职责：
-1. 检查 tmux session 是否存在；不在则启动
+Nhiệm vụ:
+1. Kiểm tra tmux session còn sống không; chưa có thì khởi động
    (lark-cli event +subscribe ... | base_event_listener.py)
-2. 启动时调一次 /drive/v1/files/{token}/subscribe 把目标表挂上事件订阅
-3. 不重复启动（tmux has-session 幂等）
+2. Khi khởi động gọi /drive/v1/files/{token}/subscribe để đăng ký sự kiện cho bảng
+3. Không khởi động trùng (tmux has-session idempotent)
 
-无 LLM 消耗，纯 shell + REST。所有配置从 config.yaml 读取。
+Không tốn LLM, chỉ shell + REST. Mọi cấu hình đọc từ config.yaml.
 """
 
 import sys
@@ -25,7 +25,7 @@ BASE_TOKEN = CFG["feishu"]["base_token"]
 TMUX_NAME  = CFG["paths"]["tmux_name"]
 LISTENER   = CFG["paths"]["listener"]
 LOG_FILE   = CFG["paths"]["log_file"]
-# 实时事件 EventKey（lark-cli v1.0.19+ `event consume <key>`）
+# EventKey real-time (lark-cli v1.0.19+ `event consume <key>`)
 EVENT_KEY  = CFG["feishu"].get("event_key", "drive.file.bitable_record_changed_v1")
 ENV        = env_with_overrides()
 
@@ -41,7 +41,7 @@ def tmux_alive():
 
 
 def lark_subscribe():
-    """订阅 bitable 文件事件（幂等，重复调 OK）"""
+    """Đăng ký sự kiện file bitable (idempotent, gọi lại OK)"""
     cmd = ["lark-cli", "api", "POST",
            f"/open-apis/drive/v1/files/{BASE_TOKEN}/subscribe",
            "--params", json.dumps({"file_type": "bitable"}),
@@ -59,7 +59,7 @@ def lark_subscribe():
 
 
 def start_tmux():
-    """启动 tmux session，里面跑 lark-cli | listener"""
+    """Khởi động tmux session, bên trong chạy lark-cli | listener"""
     try:
         open(LOG_FILE, "w").close()
     except Exception:

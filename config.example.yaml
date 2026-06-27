@@ -1,88 +1,88 @@
 # ────────────────────────────────────────────────────────────────
-# feishu-kanban-task-orchestration 配置文件 (macOS + 多 profile team 适配版)
-# 把本文件复制为 config.yaml 后填入实际值，不要把真实值提交回 git
+# feishu-kanban-task-orchestration - File cấu hình (bản macOS + team nhiều profile)
+# Copy file này thành config.yaml rồi điền giá trị thật, KHÔNG commit giá trị thật lên git
 #
 # macOS adaptation by nthunggs:
-#   - 所有路径默认指向 ~ (自动展开为 /Users/<you>)
-#   - 新增 security 段：写回身份、操作白名单、spawn 审批门
+#   - Mọi path mặc định trỏ ~ (tự mở rộng thành /Users/<you>)
+#   - Thêm mục security: định danh ghi, whitelist thao tác, cổng duyệt spawn
 # ────────────────────────────────────────────────────────────────
 
 feishu:
-  # 多维表格的 base_token（URL 中 /base/<这一段>/）
+  # base_token của bảng (trong URL: /base/<đoạn này>/)
   base_token: "REPLACE_BASE_TOKEN"
-  # 表 ID（URL 中 ?table=<这一段>）
+  # table ID (trong URL: ?table=<đoạn này>)
   table_id:   "REPLACE_TABLE_ID"
-  # 接收通知的 chat_id（DM 里通过 lark-cli im +chat-list 查到 oc_xxx）
+  # chat_id nhận thông báo (tra oc_xxx bằng lark-cli im +chat-list)
   chat_id:    "REPLACE_CHAT_ID"
-  # 实时事件 EventKey（lark-cli v1.0.19+ 用 `event consume <key>`）。
-  # 跑 `lark-cli event list` 确认你的 app 实际暴露的 key 名；
-  # 上游叫 drive.file.bitable_record_changed_v1，不同 app/版本可能略有差异。
+  # EventKey real-time (lark-cli v1.0.19+ dùng `event consume <key>`).
+  # Chạy `lark-cli event list` để xác nhận tên key app thực sự expose;
+  # repo gốc gọi drive.file.bitable_record_changed_v1, app/phiên bản khác có thể khác chút.
   event_key:  "drive.file.bitable_record_changed_v1"
 
-# 字段 ID 映射（建表后跑 lark-cli api GET /open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/fields 抓取后填入）
+# Ánh xạ field ID (sau khi tạo bảng, chạy lark-cli api GET .../fields rồi điền vào)
 field_ids:
-  任务描述:       "fldXXXXXXXX"
-  管理者:         "fldXXXXXXXX"
-  负责人:         "fldXXXXXXXX"
-  进展:           "fldXXXXXXXX"
-  澄清状态:       "fldXXXXXXXX"
-  复核状态:       "fldXXXXXXXX"
-  交付内容:       "fldXXXXXXXX"
-  任务详情:       "fldXXXXXXXX"
-  任务情况总结:   "fldXXXXXXXX"
-  开始时间:       "fldXXXXXXXX"
-  预计完成时间:   "fldXXXXXXXX"
-  是否延期:       "fldXXXXXXXX"
-  实际完成时间:   "fldXXXXXXXX"
-  最新进展记录:   "fldXXXXXXXX"
-  重要紧急程度:   "fldXXXXXXXX"
-  澄清记录:       "fldXXXXXXXX"
-  自检备注:       "fldXXXXXXXX"
-  复核反馈:       "fldXXXXXXXX"
-  Kanban链:       "fldXXXXXXXX"
-  附件:           "fldXXXXXXXX"
+  Mô tả task:       "fldXXXXXXXX"
+  Quản lý:         "fldXXXXXXXX"
+  Phụ trách:         "fldXXXXXXXX"
+  Tiến độ:           "fldXXXXXXXX"
+  Trạng thái làm rõ:       "fldXXXXXXXX"
+  Trạng thái duyệt:       "fldXXXXXXXX"
+  Nội dung giao:       "fldXXXXXXXX"
+  Chi tiết task:       "fldXXXXXXXX"
+  Tóm tắt task:   "fldXXXXXXXX"
+  Thời gian bắt đầu:       "fldXXXXXXXX"
+  Dự kiến hoàn thành:   "fldXXXXXXXX"
+  Có trễ hạn:       "fldXXXXXXXX"
+  Thời gian hoàn thành:   "fldXXXXXXXX"
+  Nhật ký tiến độ:   "fldXXXXXXXX"
+  Mức ưu tiên:   "fldXXXXXXXX"
+  Nhật ký làm rõ:       "fldXXXXXXXX"
+  Ghi chú tự kiểm:       "fldXXXXXXXX"
+  Phản hồi duyệt:       "fldXXXXXXXX"
+  Chuỗi Kanban:       "fldXXXXXXXX"
+  Đính kèm:           "fldXXXXXXXX"
 
 kanban:
-  # Hermes kanban 的 tenant 名（hermes kanban list --tenant <这个>）
+  # Tên tenant của Hermes kanban (hermes kanban list --tenant <cái này>)
   tenant: "default"
 
 # ────────────────────────────────────────────────────────────────
-# 安全控制 (macOS 适配版新增)
+# Kiểm soát an toàn (bản macOS thêm mới)
 # ────────────────────────────────────────────────────────────────
 security:
-  # 写回飞书表用哪个身份。
-  #   "bot"  = 应用机器人（推荐）：bot 只是单张表的协作者，权限最小化，
-  #            不会用你的个人账号全权写任何表。
-  #   "user" = 你的个人身份（原始默认）：拥有你账号的全部权限，风险更高。
-  # 推荐生产用 "bot"，把 bot 加为目标表协作者即可。
+  # Ghi ngược vào bảng Lark dùng định danh nào.
+  #   "bot"  = bot ứng dụng (khuyến nghị): bot chỉ là cộng tác viên 1 bảng, quyền tối thiểu,
+  #            không dùng tài khoản cá nhân để ghi mọi bảng.
+  #   "user" = định danh cá nhân (mặc định gốc): có toàn quyền tài khoản, rủi ro cao hơn.
+  # Production khuyến nghị "bot", chỉ cần thêm bot làm cộng tác viên bảng.
   write_identity: "bot"
 
-  # 允许触发编排的操作者白名单（飞书 open_id / user_id）。
-  # 监听器收到 record 变更时，若 operator 不在白名单内，只记日志、
-  # 不发 DM 给 orchestrator、不触发 spawn。空列表 = 不限制（仅记日志告警）。
-  # 防止「有人在表里打字注入指令」的攻击面。
+  # Whitelist người được phép kích hoạt điều phối (open_id / user_id Lark).
+  # Khi listener nhận thay đổi record, nếu operator ngoài whitelist thì chỉ ghi log,
+  # không gửi DM cho orchestrator, không spawn. List rỗng = không giới hạn (chỉ ghi log cảnh báo).
+  # Chặn mặt tấn công 'ai đó gõ lệnh vào bảng để inject'.
   allowed_operators: []
 
-  # spawn 审批门：true = orchestrator 收到新任务后必须人工确认才 spawn worker，
-  # false = 自动 spawn（原始行为）。建议初期 true，跑顺了再关。
+  # Cổng duyệt spawn: true = orchestrator nhận task mới phải có người xác nhận mới spawn worker,
+  # false = spawn tự động (hành vi gốc). Khuyến nghị ban đầu để true, chạy ổn rồi tắt.
   require_spawn_approval: true
 
-  # orchestrator 把「表里的文字」视为数据而非系统指令。
-  # 此开关只是提醒，真正的隔离在 orchestrator 的 SOUL/prompt 里实现：
-  # 任务描述中的任何「忽略指令 / 删除 / 改配置」字样都当作普通文本，不执行。
+  # orchestrator coi 'chữ trong bảng' là dữ liệu, không phải lệnh hệ thống.
+  # Công tắc này chỉ là nhắc nhở, cách ly thật nằm trong SOUL/prompt của orchestrator:
+  # Mọi chữ 'bỏ qua lệnh / xóa / sửa config' trong mô tả task đều coi là text thường, không thực thi.
   treat_table_text_as_data: true
 
 paths:
-  # 状态去重缓存（~ 自动展开为 /Users/<you>）
+  # Cache khử trùng sự kiện (~ tự mở rộng thành /Users/<you>)
   seen_file:   "~/.hermes/cron/state/base_event_seen.json"
   state_file:  "~/.hermes/cron/state/kanban_watch_state.json"
-  # 实时事件流日志（tee 写到这里）
+  # Log luồng sự kiện real-time (tee ghi vào đây)
   log_file:    "~/.hermes/cron/state/larkwatch.log"
-  # tmux 会话名
+  # Tên session tmux
   tmux_name:   "larkwatch"
-  # 事件监听脚本绝对路径（supervisor 启动时 pipe 到它，~ 会自动展开）
+  # Đường dẫn tuyệt đối script listener (supervisor pipe vào, ~ tự mở rộng)
   listener:   "~/.hermes/scripts/base_event_listener.py"
 
 env:
-  # lark-cli 在代理环境下的稳定开关
+  # Công tắc ổn định lark-cli khi có proxy
   LARK_CLI_NO_PROXY: "1"

@@ -4,76 +4,76 @@ Real-time **Feishu (Lark) bitable** + **Hermes Kanban** task orchestration syste
 
 A Skill package for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
-> **🍴 nthunggs fork — macOS + 多 profile team 适配版**
-> 本 fork 在上游基础上做了 macOS 适配与安全加固：路径自动展开 `~`、写回改用 bot 最小权限身份、
-> 新增操作者白名单与 spawn 审批门。详见 **[docs/macos-team-setup.md](docs/macos-team-setup.md)**。
+> **🍴 nthunggs fork — bản thích ứng cho macOS + team đa profile**
+> Fork này bổ sung thích ứng macOS và tăng cường bảo mật trên nền upstream: tự động mở rộng đường dẫn `~`, ghi dữ liệu trở lại bằng danh tính bot quyền tối thiểu,
+> thêm whitelist người thao tác và cổng phê duyệt spawn. Xem chi tiết tại **[docs/macos-team-setup.md](docs/macos-team-setup.md)**.
 
-## 是什么
+## Là gì
 
-把"飞书多维表格当任务面板，Hermes Kanban 当任务队列，多个 worker profile 当执行者"组装成一套自动化流水线：
+Lắp ráp "Feishu bitable làm bảng task, Hermes Kanban làm hàng đợi task, nhiều worker profile làm người thực thi" thành một pipeline tự động hóa:
 
-- **新建一行飞书任务表** → ≤3 秒推送通知 → orchestrator 拆解 → spawn worker
-- **worker 完成任务** → ≤3 分钟自动写回飞书表（进展/交付物/复核状态/澄清记录）
-- **worker 留 `[QUESTION]`** → 自动同步到飞书"澄清记录"字段，等用户回复 `[ANSWER]`
-- 多 agent 并行（默认配 1 个 orchestrator + 4 个 worker profile）
+- **Tạo một dòng mới trong bảng task Feishu** → đẩy thông báo ≤3 giây → orchestrator phân rã → spawn worker
+- **worker hoàn thành task** → tự động ghi trở lại bảng Feishu trong ≤3 phút (tiến độ/sản phẩm giao/trạng thái duyệt/nhật ký làm rõ)
+- **worker để lại `[QUESTION]`** → tự động đồng bộ vào field "Nhật ký làm rõ" của Feishu, chờ người dùng trả lời `[ANSWER]`
+- Nhiều agent chạy song song (mặc định cấu hình 1 orchestrator + 4 worker profile)
 
-零 LLM 持续消耗（监听走 WebSocket 长连，写回走 cron 轮询，都是 `no_agent` 脚本）。
+Không tiêu tốn LLM liên tục (lắng nghe qua kết nối dài WebSocket, ghi trở lại qua cron polling, đều là script `no_agent`).
 
-## 数据流
+## Luồng dữ liệu
 
 ```
-飞书多维表格（任务表）
+Feishu bitable (bảng task)
    │ ↑
-   │ │ 写回（kanban_watch.py，3 min cron）
+   │ │ Ghi trở lại (kanban_watch.py, cron 3 min)
    │ ↓
-   │ ├─ 进展 / 实际完成时间 / 任务情况总结
-   │ ├─ 交付内容（feishu doc URL）
-   │ ├─ 复核状态 / 复核反馈
-   │ └─ 澄清记录（[QUESTION]/[ANSWER]）
+   │ ├─ Tiến độ / Thời gian hoàn thành / Tóm tắt task
+   │ ├─ Nội dung giao (feishu doc URL)
+   │ ├─ Trạng thái duyệt / Phản hồi duyệt
+   │ └─ Nhật ký làm rõ ([QUESTION]/[ANSWER])
    │
-   │ 实时推送（base_event_listener.py，WebSocket）
+   │ Đẩy thời gian thực (base_event_listener.py, WebSocket)
    ↓
-飞书 DM（用户）→ 调用 orchestrator
+Feishu DM (người dùng) → gọi orchestrator
    │
    ↓
 Hermes Kanban
    │
-   ├─→ orchestrator profile（如 Judy）拆解 + 分派
-   └─→ worker profiles（如 bogo / bonnie / clawhauser / stu）执行
+   ├─→ orchestrator profile (như Judy) phân rã + phân phối
+   └─→ worker profiles (như bogo / bonnie / clawhauser / stu) thực thi
 ```
 
-## 快速开始
+## Bắt đầu nhanh
 
-### 1. 前置依赖
+### 1. Phụ thuộc cần có trước
 
-- [Hermes Agent](https://github.com/NousResearch/hermes-agent) 已安装并配置租户
-- [lark-cli](https://github.com/larksuite/cli) v1.0.19+ 已安装并绑定到飞书自建应用
-- `tmux` 可用
-- 飞书自建应用具备：
-  - **应用身份**权限：`bitable:app:readonly`、`im:message:send_as_bot`
-  - 事件订阅（长连接模式）：`drive.file.bitable_record_changed_v1`
-  - 应用机器人是目标多维表格的协作者
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent) đã cài đặt và cấu hình tenant
+- [lark-cli](https://github.com/larksuite/cli) v1.0.19+ đã cài đặt và liên kết với ứng dụng tự xây Feishu
+- `tmux` khả dụng
+- Ứng dụng tự xây Feishu có:
+  - Quyền **danh tính ứng dụng**: `bitable:app:readonly`, `im:message:send_as_bot`
+  - Đăng ký sự kiện (chế độ kết nối dài): `drive.file.bitable_record_changed_v1`
+  - Robot ứng dụng là cộng tác viên của bitable mục tiêu
 
-> 详细的飞书后台配置步骤见 [docs/setup-guide.md](docs/setup-guide.md)。
+> Các bước cấu hình chi tiết trong trang quản trị Feishu xem [docs/setup-guide.md](docs/setup-guide.md).
 
-### 2. 创建任务表
+### 2. Tạo bảng task
 
-按 [`templates/feishu-base-schema.json`](templates/feishu-base-schema.json) 在飞书新建一张多维表格，包含 20 个字段（任务描述、负责人、进展、复核状态…）。
+Theo [`templates/feishu-base-schema.json`](templates/feishu-base-schema.json) tạo một bitable mới trên Feishu, gồm 20 field (Mô tả task, Phụ trách, Tiến độ, Trạng thái duyệt…).
 
-或者复用已有表格，把字段名对齐到模板即可（field_id 不需要相同，脚本会按字段名解析）。
+Hoặc tái sử dụng bảng đã có, chỉ cần căn chỉnh tên field theo template (field_id không cần giống nhau, script sẽ phân giải theo tên field).
 
-### 3. 配置
+### 3. Cấu hình
 
-复制 `config.example.yaml` 为 `config.yaml`，填入：
+Sao chép `config.example.yaml` thành `config.yaml`, điền vào:
 
 ```yaml
 feishu:
-  base_token: "你的多维表格 app_token"
-  table_id:   "你的任务表 table_id"
-  chat_id:    "你的 P2P 飞书 DM chat_id"
+  base_token: "app_token bitable của bạn"
+  table_id:   "table_id bảng task của bạn"
+  chat_id:    "chat_id Feishu DM P2P của bạn"
 
 hermes:
-  tenant: "你的 hermes 租户名"
+  tenant: "tên tenant hermes của bạn"
   orchestrator_profile: "Judy"
   worker_profiles: ["bogo", "bonnie", "clawhauser", "stu"]
 
@@ -83,86 +83,86 @@ paths:
   tmux_session: "larkwatch"
 ```
 
-### 4. 部署
+### 4. Triển khai
 
 ```bash
 bash scripts/install.sh
 ```
 
-会做三件事：
-1. 把脚本拷到 `~/.hermes/scripts/`
-2. 调用 `/drive/v1/files/{token}/subscribe` 订阅多维表格事件
-3. 注册两个 cron job：
-   - `飞书任务表监听守护`（每 60 s，supervisor，保活 tmux + 重订阅）
-   - `任务状态同步`（每 3 min，kanban → 飞书写回）
+Sẽ làm ba việc:
+1. Sao chép script vào `~/.hermes/scripts/`
+2. Gọi `/drive/v1/files/{token}/subscribe` để đăng ký sự kiện bitable
+3. Đăng ký hai cron job:
+   - `Giám sát lắng nghe bảng task Feishu` (mỗi 60 s, supervisor, giữ sống tmux + đăng ký lại)
+   - `Đồng bộ trạng thái task` (mỗi 3 min, ghi trở lại kanban → Feishu)
 
-### 5. 验证
+### 5. Kiểm thử
 
-在飞书任务表里加一行 → ≤3 秒应收到飞书 DM 通知。
-完成一个 kanban 任务 → ≤3 分钟应看到任务表"进展"字段更新。
+Thêm một dòng vào bảng task Feishu → trong ≤3 giây sẽ nhận được thông báo Feishu DM.
+Hoàn thành một task kanban → trong ≤3 phút sẽ thấy field "Tiến độ" của bảng task được cập nhật.
 
-## 仓库结构
+## Cấu trúc repo
 
 ```
 .
 ├── README.md
-├── SKILL.md                    # Hermes skill 入口
+├── SKILL.md                    # Điểm vào skill Hermes
 ├── LICENSE
 ├── config.example.yaml
 ├── scripts/
-│   ├── base_event_listener.py     # 实时事件解析 + 飞书 DM 通知
-│   ├── base_watch_supervisor.py   # tmux 保活 + 自动重订阅
-│   ├── kanban_watch.py            # kanban → 飞书写回（3 min 轮询）
-│   └── install.sh                 # 一键安装
+│   ├── base_event_listener.py     # Phân giải sự kiện thời gian thực + thông báo Feishu DM
+│   ├── base_watch_supervisor.py   # Giữ sống tmux + tự động đăng ký lại
+│   ├── kanban_watch.py            # Ghi trở lại kanban → Feishu (polling 3 min)
+│   └── install.sh                 # Cài đặt một lệnh
 ├── templates/
-│   ├── feishu-base-schema.json    # 任务表字段定义（20 字段，含枚举选项）
-│   ├── cron-jobs.yaml             # cron 清单
-│   └── profile-prompts/           # orchestrator/worker prompt 模板
+│   ├── feishu-base-schema.json    # Định nghĩa field bảng task (20 field, kèm tùy chọn enum)
+│   ├── cron-jobs.yaml             # Danh sách cron
+│   └── profile-prompts/           # Template prompt orchestrator/worker
 │       ├── orchestrator.md
 │       └── worker.md
 └── docs/
-    ├── setup-guide.md          # 飞书后台权限/事件订阅图文步骤
-    ├── architecture.md         # 架构数据流图 + 关键设计决策
-    ├── multi-agent-profiles.md # Judy + 4 worker 编排约定
-    └── troubleshooting.md      # 常见问题
+    ├── setup-guide.md          # Các bước minh họa quyền/đăng ký sự kiện trong trang quản trị Feishu
+    ├── architecture.md         # Sơ đồ luồng dữ liệu kiến trúc + các quyết định thiết kế then chốt
+    ├── multi-agent-profiles.md # Quy ước điều phối Judy + 4 worker
+    └── troubleshooting.md      # Các vấn đề thường gặp
 ```
 
-## 设计要点
+## Điểm thiết kế chính
 
-### 为什么要 tmux？
+### Tại sao cần tmux?
 
-实测 `lark-cli event +subscribe` 在 systemd / Python subprocess 下 0.1 s 必死（即使加 `start_new_session=True` / `KillMode=process`），唯一可用方案是 tmux。
+Thực nghiệm cho thấy `lark-cli event +subscribe` chết chắc trong 0.1 s khi chạy dưới systemd / Python subprocess (kể cả khi thêm `start_new_session=True` / `KillMode=process`), phương án duy nhất khả dụng là tmux.
 
-详见 [docs/architecture.md](docs/architecture.md) 的 "Process persistence pitfalls"。
+Xem chi tiết "Process persistence pitfalls" trong [docs/architecture.md](docs/architecture.md).
 
-### 为什么 drive 事件需要两步订阅？
+### Tại sao sự kiện drive cần đăng ký hai bước?
 
-仅在飞书后台勾选事件类型不够，**还要显式调 API 把具体文件挂到事件订阅**：
+Chỉ tích chọn loại sự kiện trong trang quản trị Feishu là chưa đủ, **còn phải gọi API tường minh để gắn file cụ thể vào đăng ký sự kiện**:
 
 ```bash
 lark-cli api POST /open-apis/drive/v1/files/{file_token}/subscribe \
   --params '{"file_type":"bitable"}' --as bot
 ```
 
-否则 lark-cli 即便 `Connected`，也只能收到 IM 类事件，收不到 drive 事件。
+Nếu không, dù lark-cli báo `Connected`, cũng chỉ nhận được sự kiện loại IM, không nhận được sự kiện drive.
 
-详见 [docs/setup-guide.md](docs/setup-guide.md)。
+Xem chi tiết [docs/setup-guide.md](docs/setup-guide.md).
 
-### 为什么 kanban → 飞书走轮询而不是事件？
+### Tại sao kanban → Feishu dùng polling chứ không dùng sự kiện?
 
-Hermes Kanban 是本地状态机，没有外部事件总线。3 分钟轮询足够覆盖人类决策周期（用户看到通知→上下文切换→评估→反馈），无需更高频。
+Hermes Kanban là máy trạng thái cục bộ, không có bus sự kiện bên ngoài. Polling 3 phút đủ bao phủ chu kỳ ra quyết định của con người (người dùng thấy thông báo → chuyển ngữ cảnh → đánh giá → phản hồi), không cần tần suất cao hơn.
 
-## 已踩过的坑
+## Những cái bẫy đã gặp
 
-完整列表见 [docs/troubleshooting.md](docs/troubleshooting.md)。摘要：
+Danh sách đầy đủ xem [docs/troubleshooting.md](docs/troubleshooting.md). Tóm tắt:
 
-| 现象 | 原因 |
+| Hiện tượng | Nguyên nhân |
 |------|------|
-| `99991672 action_scope_required` | 权限只勾了"用户身份"，没勾"应用身份"；或新版本未发布 |
-| WebSocket Connected 但不收 drive 事件 | 没调 `/drive/files/{token}/subscribe` |
-| lark-cli 启动后立即 exit code 2 | 已有另一个 `event +subscribe` 实例占着单例锁 |
-| 进程在 systemd 下 0.1 s 必死 | 改用 tmux |
-| 事件载荷里没有字段名 | 用 record-get API 拉详情时按字段名匹配 |
+| `99991672 action_scope_required` | Quyền chỉ tích "danh tính người dùng", chưa tích "danh tính ứng dụng"; hoặc phiên bản mới chưa phát hành |
+| WebSocket Connected nhưng không nhận sự kiện drive | Chưa gọi `/drive/files/{token}/subscribe` |
+| lark-cli khởi động xong là exit code 2 ngay | Đã có một instance `event +subscribe` khác đang giữ khóa singleton |
+| Tiến trình chết chắc trong 0.1 s dưới systemd | Đổi sang dùng tmux |
+| Payload sự kiện không có tên field | Khi gọi API record-get lấy chi tiết thì khớp theo tên field |
 
 ## License
 

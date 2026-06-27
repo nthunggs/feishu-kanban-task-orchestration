@@ -1,47 +1,47 @@
-# 部署指南
+# Hướng dẫn triển khai
 
-## 0. 前置依赖
+## 0. Dependency tiên quyết
 
-- Linux 服务器(任何能跑 cron 和 tmux 的环境)
-- Python 3.9+，`pip install pyyaml`
-- `tmux`(`apt install tmux` / `yum install tmux`)
-- Hermes Agent 已装并 `hermes` CLI 可用
-- `lark-cli` 已装并完成绑定(参考 [lark-shared](https://hermes-agent.nousresearch.com/))
+- Máy chủ Linux (bất kỳ môi trường nào chạy được cron và tmux)
+- Python 3.9+, `pip install pyyaml`
+- `tmux` (`apt install tmux` / `yum install tmux`)
+- Hermes Agent đã cài và `hermes` CLI dùng được
+- `lark-cli` đã cài và hoàn tất binding (tham khảo [lark-shared](https://hermes-agent.nousresearch.com/))
 
-## 1. 飞书后台权限准备(最容易踩坑)
+## 1. Chuẩn bị quyền ở backend Feishu (dễ vướng bẫy nhất)
 
-在 https://open.feishu.cn/app 找到你的 app，做下面三件事：
+Vào https://open.feishu.cn/app tìm app của bạn, làm ba việc dưới đây:
 
-### 1.1 添加权限
+### 1.1 Thêm quyền
 
-进「权限管理」，**两栏都要勾**：
+Vào «Quản lý quyền», **tick cả hai cột**:
 
-| 权限 | 用户身份 | 应用身份 |
+| Quyền | Danh tính người dùng | Danh tính ứng dụng |
 |---|---|---|
 | `bitable:app:readonly` | ✓ | ✓ |
-| `im:message` (发消息) | ✓ | ✓ |
-| `drive:drive:readonly` 或 `drive:file:readonly` | ✓ | ✓ |
+| `im:message` (gửi tin nhắn) | ✓ | ✓ |
+| `drive:drive:readonly` hoặc `drive:file:readonly` | ✓ | ✓ |
 
-⚠️ **「用户身份」和「应用身份」是两栏不同权限**。事件订阅走 `--as bot` 必须勾**应用身份**那栏。这是 99991672 permission denied 的最常见原因。
+⚠️ **«Danh tính người dùng» và «danh tính ứng dụng» là hai cột quyền khác nhau**. Đăng ký sự kiện đi qua `--as bot` thì bắt buộc tick cột **danh tính ứng dụng**. Đây là nguyên nhân phổ biến nhất của lỗi 99991672 permission denied.
 
-### 1.2 订阅事件
+### 1.2 Đăng ký sự kiện
 
-进「事件订阅」，订阅这两个事件：
+Vào «Đăng ký sự kiện», đăng ký hai sự kiện này:
 
-- `drive.file.bitable_record_changed_v1`(多维表格记录变更)
-- `im.message.receive_v1`(IM 消息接收，可选，用于响应 @ 提及)
+- `drive.file.bitable_record_changed_v1` (thay đổi record bảng nhiều chiều)
+- `im.message.receive_v1` (nhận tin nhắn IM, tùy chọn, dùng để phản hồi khi bị @ nhắc tên)
 
-### 1.3 重新创建版本并发布
+### 1.3 Tạo lại phiên bản và phát hành
 
-权限和事件订阅改完，必须去「应用发布」**重新创建一个版本**并上线，否则改动不生效。
+Sau khi sửa xong quyền và đăng ký sự kiện, bắt buộc vào «Phát hành ứng dụng» **tạo lại một phiên bản mới** và lên sóng, nếu không thay đổi sẽ không có hiệu lực.
 
 ---
 
-## 2. 创建任务表
+## 2. Tạo bảng task
 
-参考 `templates/feishu-base-schema.json`，用 `lark-cli` 或飞书界面建一张 20 字段表。
+Tham khảo `templates/feishu-base-schema.json`, dùng `lark-cli` hoặc giao diện Feishu để tạo một bảng 20 cột.
 
-建好后跑：
+Tạo xong thì chạy:
 
 ```bash
 lark-cli api GET \
@@ -49,13 +49,13 @@ lark-cli api GET \
   --as bot
 ```
 
-把每个 `field.field_id` 抄到 `config.yaml` 的 `field_ids:` 段。
+Chép từng `field.field_id` vào mục `field_ids:` của `config.yaml`.
 
 ---
 
-## 3. 显式订阅 bitable 文件(第二个最容易踩坑)
+## 3. Đăng ký tường minh file bitable (chỗ dễ vướng bẫy thứ hai)
 
-仅在飞书后台勾事件类型 **不够**。drive 类事件还需要每张表显式挂单：
+Chỉ tick loại sự kiện ở backend Feishu là **chưa đủ**. Sự kiện loại drive còn cần đăng ký tường minh cho từng bảng:
 
 ```bash
 lark-cli api POST \
@@ -64,71 +64,71 @@ lark-cli api POST \
   --as bot
 ```
 
-返回 `{"code":0, "msg":"Success"}` 即成功。`base_watch_supervisor.py` 启动 tmux 时会自动调一次这个 API,所以只要 supervisor cron 跑过就不用手工调。
+Trả về `{"code":0, "msg":"Success"}` là thành công. `base_watch_supervisor.py` khi khởi động tmux sẽ tự động gọi API này một lần, nên chỉ cần supervisor cron đã chạy thì không phải gọi thủ công.
 
-⚠️ 这步如果漏了，listener 只能收到 IM 事件，**收不到任何 bitable 事件**。这是 lark-cli 文档没明说的坑。
+⚠️ Nếu bỏ sót bước này, listener chỉ nhận được sự kiện IM, **không nhận được bất kỳ sự kiện bitable nào**. Đây là bẫy mà tài liệu lark-cli không nói rõ.
 
 ---
 
-## 4. 安装脚本
+## 4. Cài đặt script
 
 ```bash
 mkdir -p ~/.hermes/scripts ~/.hermes/cron/state ~/.hermes/feishu-kanban-task-orchestration
 cp scripts/_config.py scripts/*.py ~/.hermes/scripts/
 chmod +x ~/.hermes/scripts/*.py
 cp config.example.yaml ~/.hermes/feishu-kanban-task-orchestration/config.yaml
-# 编辑 ~/.hermes/feishu-kanban-task-orchestration/config.yaml,填入实际值
+# Sửa ~/.hermes/feishu-kanban-task-orchestration/config.yaml, điền giá trị thực tế
 ```
 
-`_config.py` 会按这个顺序找 config.yaml：
+`_config.py` sẽ tìm config.yaml theo thứ tự này:
 
-1. `$FKTO_CONFIG` 环境变量
-2. 脚本同级 `../config.yaml`
+1. Biến môi trường `$FKTO_CONFIG`
+2. `../config.yaml` cùng cấp với script
 3. `~/.hermes/feishu-kanban-task-orchestration/config.yaml`
 4. `/etc/feishu-kanban-task-orchestration/config.yaml`
 
 ---
 
-## 5. 第一次手工启动 supervisor 测试
+## 5. Lần đầu khởi động supervisor thủ công để test
 
 ```bash
 python3 ~/.hermes/scripts/base_watch_supervisor.py
-# 应该看到：
+# Sẽ thấy:
 # [HH:MM:SS] tmux session missing, restarting...
 # [HH:MM:SS] drive subscribe ok
 # [HH:MM:SS] tmux session 'larkwatch' started
 
 tmux ls
-# 应该看到：larkwatch: 1 windows ...
+# Sẽ thấy: larkwatch: 1 windows ...
 
 tail -f /tmp/larkwatch.log
-# 应该看到 lark-cli 的连接日志(connected to wss://...)
-# 然后去飞书表添加一行,几秒内 listener 应解析到事件
+# Sẽ thấy log kết nối của lark-cli (connected to wss://...)
+# Sau đó vào bảng Feishu thêm một dòng, trong vài giây listener sẽ parse được sự kiện
 ```
 
 ---
 
-## 6. 注册 cron
+## 6. Đăng ký cron
 
-参考 `templates/cron-jobs.yaml`：
+Tham khảo `templates/cron-jobs.yaml`:
 
 ```bash
 hermes cron add --no-agent --schedule "* * * * *" \
   --script ~/.hermes/scripts/base_watch_supervisor.py \
-  --name "飞书事件监听守护(tmux保活)"
+  --name "Giám sát lắng nghe sự kiện Feishu (giữ tmux sống)"
 
 hermes cron add --no-agent --schedule "*/3 * * * *" \
   --script ~/.hermes/scripts/kanban_watch.py \
-  --name "Kanban → 飞书写回"
+  --name "Kanban → ghi ngược Feishu"
 ```
 
-也可以用 hermes UI 创建，效果一样。
+Cũng có thể tạo bằng hermes UI, kết quả như nhau.
 
 ---
 
-## 7. 故障排查
+## 7. Khắc phục sự cố
 
-### tmux session 起不来
+### tmux session không khởi động được
 
 ```bash
 tmux kill-session -t larkwatch 2>/dev/null
@@ -136,31 +136,31 @@ python3 ~/.hermes/scripts/base_watch_supervisor.py
 tmux ls
 ```
 
-如果还是起不来，多半是 `lark-cli` 自己有问题：
+Nếu vẫn không khởi động được, phần lớn là bản thân `lark-cli` có vấn đề:
 
 ```bash
 LARK_CLI_NO_PROXY=1 lark-cli event +subscribe \
   --as bot --event-types drive.file.bitable_record_changed_v1
-# 看错误信息
+# Xem thông báo lỗi
 ```
 
-### 收到 IM 事件但收不到 bitable 事件
+### Nhận được sự kiện IM nhưng không nhận được sự kiện bitable
 
-99% 是没做第 3 步的显式订阅。手工再调一次 drive subscribe API。
+99% là chưa làm bước 3 đăng ký tường minh. Gọi lại thủ công API drive subscribe một lần nữa.
 
-### bot 报 99991672 permission denied
+### bot báo 99991672 permission denied
 
-回到第 1.1 步，确认**应用身份**那栏勾了 `bitable:app:readonly`，并且第 1.3 步重新创建版本上线了。
+Quay lại bước 1.1, xác nhận cột **danh tính ứng dụng** đã tick `bitable:app:readonly`, và bước 1.3 đã tạo lại phiên bản và lên sóng.
 
-### kanban_watch 写不回
+### kanban_watch không ghi ngược được
 
 ```bash
-# 直接跑一次看错误
+# Chạy trực tiếp một lần để xem lỗi
 python3 ~/.hermes/scripts/kanban_watch.py
-# 检查 hermes kanban CLI 是否能输出 JSON
-hermes kanban list --tenant <你的 tenant> --json | head -20
+# Kiểm tra hermes kanban CLI có xuất được JSON không
+hermes kanban list --tenant <tenant của bạn> --json | head -20
 ```
 
-### lark-cli 经代理报 [WARN] proxy detected
+### lark-cli đi qua proxy báo [WARN] proxy detected
 
-设置 `env.LARK_CLI_NO_PROXY: "1"` (config.yaml 里默认已设)。
+Đặt `env.LARK_CLI_NO_PROXY: "1"` (trong config.yaml đã đặt sẵn mặc định).

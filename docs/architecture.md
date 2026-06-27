@@ -1,117 +1,117 @@
-# 架构说明
+# Mô tả kiến trúc
 
-## 三个角色
+## Ba vai trò
 
 ```
 ┌────────────────────────┐    ┌────────────────────────┐    ┌────────────────────────┐
-│      飞书多维表格      │    │     Hermes Kanban      │    │   Profile (Agents)     │
-│   (任务管理 UI)        │    │   (执行队列)           │    │   (执行人)             │
+│      Feishu bitable    │    │     Hermes Kanban      │    │   Profile (Agents)     │
+│   (UI quản lý task)    │    │   (hàng đợi thực thi)  │    │   (người thực thi)     │
 │                        │    │                        │    │                        │
-│  - 任务描述            │    │  status:               │    │  Judy (orchestrator)   │
-│  - 进展                │    │    todo/ready/         │    │  bogo / bonnie /       │
-│  - 复核状态            │    │    running/done/       │    │  clawhauser / stu      │
-│  - 澄清记录            │    │    blocked             │    │  (workers)             │
-│  - Kanban 链           │    │  comments:             │    │                        │
-│  - 交付内容            │    │    [QUESTION]/[ANSWER] │    │                        │
+│  - Mô tả task          │    │  status:               │    │  Judy (orchestrator)   │
+│  - Tiến độ             │    │    todo/ready/         │    │  bogo / bonnie /       │
+│  - Trạng thái duyệt    │    │    running/done/       │    │  clawhauser / stu      │
+│  - Nhật ký làm rõ      │    │    blocked             │    │  (workers)             │
+│  - Chuỗi Kanban        │    │  comments:             │    │                        │
+│  - Nội dung giao       │    │    [QUESTION]/[ANSWER] │    │                        │
 └──────────┬─────────────┘    └──────────┬─────────────┘    └──────────┬─────────────┘
            │                             │                             │
            │  drive event WebSocket      │  spawn/result               │  spawn worker
-           │  (秒级)                     │  (立即)                      │
+           │  (cỡ giây)                  │  (tức thì)                   │
            ▼                             ▼                             │
 ┌────────────────────────┐    ┌────────────────────────┐               │
 │ base_event_listener    │    │   kanban_watch         │◀──────────────┘
-│  - 解析 NDJSON         │    │  - 3 分钟轮询           │
-│  - 拉记录              │    │  - 状态/QA 写回         │
-│  - 发飞书 DM           │    │  - 链尾追加 ✅          │
+│  - Phân giải NDJSON    │    │  - Polling 3 phút       │
+│  - Lấy record          │    │  - Ghi trở lại status/QA│
+│  - Gửi Feishu DM       │    │  - Nối ✅ vào cuối chuỗi │
 └──────────┬─────────────┘    └──────────┬─────────────┘
            │                             │
            ▼                             ▼
-   通知 orchestrator                飞书表自动更新
+   Thông báo orchestrator           Bảng Feishu tự cập nhật
 ```
 
-## 数据流：人创建任务 → worker 完成
+## Luồng dữ liệu: người tạo task → worker hoàn thành
 
-1. **人在飞书表填一行**
-   - 任务描述 / 负责人 / 重要紧急程度
+1. **Người điền một dòng trong bảng Feishu**
+   - Mô tả task / Phụ trách / Mức ưu tiên
 
-2. **WebSocket 事件触发**
-   - lark-cli event +subscribe 收到 NDJSON event
-   - base_event_listener 解析 → 拉记录 → 发飞书 DM
+2. **Sự kiện WebSocket kích hoạt**
+   - lark-cli event +subscribe nhận NDJSON event
+   - base_event_listener phân giải → lấy record → gửi Feishu DM
 
-3. **orchestrator 收到通知**
-   - 看 DM 里的任务概要 → 查飞书表全文
-   - 决定 spawn 哪个 worker → `hermes kanban create` 创建 kanban 任务（lark-cli/hermes v1：add 已改名 create）
-   - 把 kanban id 写到飞书表「Kanban链」字段
+3. **orchestrator nhận thông báo**
+   - Xem tóm tắt task trong DM → tra toàn văn bảng Feishu
+   - Quyết định spawn worker nào → `hermes kanban create` để tạo task kanban (lark-cli/hermes v1: add đã đổi tên thành create)
+   - Ghi kanban id vào field "Chuỗi Kanban" của bảng Feishu
 
-4. **worker 跑任务**
+4. **worker chạy task**
    - kanban status: ready → running
-   - 跑过程中遇到不清晰 → comment `[QUESTION] xxx`
-   - 完成 → kanban status: done + result.summary + result.metadata.deliverable_url
+   - Trong quá trình chạy gặp chỗ chưa rõ → comment `[QUESTION] xxx`
+   - Hoàn thành → kanban status: done + result.summary + result.metadata.deliverable_url
 
-5. **kanban_watch 把状态写回飞书**
-   - done → 进展=已完成、复核状态=待复核、交付内容=URL
-   - QUESTION → 澄清状态=待澄清、澄清记录追加
-   - 链尾追加 ✅<kid>
+5. **kanban_watch ghi trạng thái trở lại Feishu**
+   - done → Tiến độ=Đã hoàn thành, Trạng thái duyệt=Chờ duyệt, Nội dung giao=URL
+   - QUESTION → Trạng thái làm rõ=Chờ làm rõ, nối thêm vào Nhật ký làm rõ
+   - Nối ✅<kid> vào cuối chuỗi
 
-6. **人在飞书表复核**
-   - 复核状态：待复核 → 通过 / 有问题
-   - 改动通过 WebSocket 事件再次回到 orchestrator
-   - 「有问题」时 orchestrator spawn 修订任务（链尾追加 ✏️<kid>）
+6. **Người duyệt trong bảng Feishu**
+   - Trạng thái duyệt: Chờ duyệt → Đạt / Có vấn đề
+   - Thay đổi quay lại orchestrator qua sự kiện WebSocket một lần nữa
+   - Khi "Có vấn đề", orchestrator spawn task sửa đổi (nối ✏️<kid> vào cuối chuỗi)
 
-## 为什么用 tmux 而不是 systemd
+## Tại sao dùng tmux mà không dùng systemd
 
-实测过：
+Đã thực nghiệm:
 
-- `python subprocess.Popen(lark-cli, ...)` → lark-cli 在 0.1 秒内退出
-- `nohup setsid lark-cli ...` → 进程被 SIGKILL/SIGTERM
-- `systemd-run --scope ...` → service 起来但 socket 立刻断
-- `systemd unit` → 类似 systemd-run，连接不稳
+- `python subprocess.Popen(lark-cli, ...)` → lark-cli thoát trong vòng 0.1 giây
+- `nohup setsid lark-cli ...` → tiến trình bị SIGKILL/SIGTERM
+- `systemd-run --scope ...` → service khởi lên nhưng socket đứt ngay lập tức
+- `systemd unit` → tương tự systemd-run, kết nối không ổn định
 
-只有 tmux 工作得很好，原因：
+Chỉ có tmux hoạt động tốt, lý do:
 
-- tmux server 是独立进程，独立 PTY，不受父进程信号影响
-- lark-cli 似乎对 stdin/stdout 是不是 TTY 敏感
-- tmux session detach 后 server 继续跑，pipeline 不会被 SIGHUP
+- tmux server là tiến trình độc lập, PTY độc lập, không chịu ảnh hưởng tín hiệu từ tiến trình cha
+- lark-cli có vẻ nhạy cảm với việc stdin/stdout có phải TTY hay không
+- Sau khi tmux session detach, server vẫn tiếp tục chạy, pipeline không bị SIGHUP
 
-## 为什么混合「实时事件 + 3 分钟轮询」
+## Tại sao kết hợp "sự kiện thời gian thực + polling 3 phút"
 
-| 通道 | 延迟 | 信息粒度 | 触发方向 | 备注 |
+| Kênh | Độ trễ | Độ chi tiết thông tin | Hướng kích hoạt | Ghi chú |
 |---|---|---|---|---|
-| 飞书 WebSocket | 秒级 | 字段级 diff | 飞书 → 本地 | 只覆盖飞书侧变化 |
-| kanban_watch | 3 分钟 | 任务级状态 | kanban → 飞书 | 覆盖 kanban 侧变化 |
-| Hermes 内部 events | 立即 | 任务事件 | kanban → orchestrator | 用于 orchestrator 自动响应 |
+| Feishu WebSocket | cỡ giây | diff mức field | Feishu → cục bộ | Chỉ bao phủ thay đổi phía Feishu |
+| kanban_watch | 3 phút | trạng thái mức task | kanban → Feishu | Bao phủ thay đổi phía kanban |
+| Hermes internal events | tức thì | sự kiện task | kanban → orchestrator | Dùng cho orchestrator tự động phản hồi |
 
-三个通道各管一段：飞书的人工动作走 WebSocket(快)，kanban 状态走轮询(简单可靠)，agent 之间走 Hermes 内部事件(无需外部 API)。
+Ba kênh mỗi kênh phụ trách một đoạn: thao tác thủ công của người trên Feishu đi qua WebSocket (nhanh), trạng thái kanban đi qua polling (đơn giản đáng tin cậy), giữa các agent đi qua Hermes internal events (không cần API bên ngoài).
 
-## 配置中心化
+## Tập trung hóa cấu hình
 
-所有可变参数都在 `config.yaml`：
+Tất cả tham số có thể thay đổi đều nằm trong `config.yaml`:
 
-- 飞书：base_token / table_id / chat_id / 字段 ID
-- Kanban：tenant
-- 路径：state file / log file / tmux 名
+- Feishu: base_token / table_id / chat_id / field ID
+- Kanban: tenant
+- Đường dẫn: state file / log file / tên tmux
 
-脚本通过 `_config.py` 加载，不写硬编码。fork 这个 skill 的人只改 config.yaml 即可。
+Script nạp qua `_config.py`, không viết hardcode. Người fork skill này chỉ cần sửa config.yaml là được.
 
-## Profile 约定（参考实现，可改）
+## Quy ước Profile (cài đặt tham khảo, có thể đổi)
 
-我自己用的一套：
+Một bộ tôi tự dùng:
 
-| Profile | 角色 | 模型 |
+| Profile | Vai trò | Model |
 |---|---|---|
-| Judy | orchestrator(决定派给谁) | claude-opus 等贵的 |
-| bogo | worker - 通用调研 | 中等 |
-| bonnie | worker - 写作 | 中等 |
-| clawhauser | worker - 流程 / 工作流 | 便宜 |
-| stu | worker - 杂务 | 便宜 |
+| Judy | orchestrator (quyết định giao cho ai) | claude-opus v.v. loại đắt |
+| bogo | worker - nghiên cứu tổng quát | trung bình |
+| bonnie | worker - viết lách | trung bình |
+| clawhauser | worker - quy trình / workflow | rẻ |
+| stu | worker - việc vặt | rẻ |
 
-worker profile 在自己的 system prompt 里 ack：
+worker profile ack trong system prompt của chính nó:
 
-- 收到 kanban 任务 → status: ready → running
-- 不清楚要补一句 `[QUESTION]` comment → status: ready，等 [ANSWER]
-- 完成 → status: done + deliverable URL + self_check_notes
+- Nhận task kanban → status: ready → running
+- Chưa rõ thì bổ sung một comment `[QUESTION]` → status: ready, chờ [ANSWER]
+- Hoàn thành → status: done + deliverable URL + self_check_notes
 
-## 复核硬规则
+## Quy tắc cứng khi duyệt
 
-复核前必须跑 PRE-FLIGHT 检查（见 kanban-orchestrator skill）。
-反馈里只要含「建议 / 下次」，状态必须置「有问题」（不能是「通过」），否则 worker 会以为没事，下次还犯同样错。
+Trước khi duyệt bắt buộc phải chạy kiểm tra PRE-FLIGHT (xem skill kanban-orchestrator).
+Trong phản hồi chỉ cần có chứa "đề xuất / lần sau", trạng thái bắt buộc phải đặt là "Có vấn đề" (không được là "Đạt"), nếu không worker sẽ tưởng là ổn, lần sau vẫn mắc lỗi cũ.

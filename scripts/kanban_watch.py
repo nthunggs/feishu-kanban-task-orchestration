@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-kanban 状态监听器（轮询，建议 cron 3 分钟跑一次）
+Bộ theo dõi trạng thái kanban (polling, khuyến nghị cron 3 phút/lần)
 
-no_agent 模式：检测 kanban 任务状态变化 → 直接写回飞书表
-有变化才写；无变化则无输出（cron no_agent 不耗 token）。
+Chế độ no_agent: phát hiện kanban đổi trạng thái → ghi ngược vào bảng Lark
+Có thay đổi mới ghi; không đổi thì không output (cron no_agent không tốn token).
 
-状态映射：
-  kanban done       → 飞书「进展=已完成」+「复核状态=待复核」+ 交付内容
-  kanban blocked    → 飞书「进展=已停滞」
-  kanban running    → 仅首次通知 worker 已 spawn
-  kanban [QUESTION] → 写「澄清状态=待澄清」+「澄清记录」
-  kanban [ANSWER]   → 写「澄清状态=已澄清」
+Ánh xạ trạng thái:
+  kanban done       → bảng Lark「Tiến độ=Đã hoàn thành」+「Trạng thái duyệt=Chờ duyệt」+ Nội dung giao
+  kanban blocked    → bảng Lark「Tiến độ=Đình trệ」
+  kanban running    → chỉ báo lần đầu khi worker đã spawn
+  kanban [QUESTION] → ghi「Trạng thái làm rõ=Chờ làm rõ」+「Nhật ký làm rõ」
+  kanban [ANSWER]   → ghi「Trạng thái làm rõ=Đã làm rõ」
 
-所有配置从 config.yaml 读取（base_token / table_id / tenant / state_file）。
+Mọi cấu hình đọc từ config.yaml (base_token / table_id / tenant / state_file).
 """
 
 import json
@@ -31,7 +31,7 @@ BASE_TOKEN = CFG["feishu"]["base_token"]
 TABLE_ID   = CFG["feishu"]["table_id"]
 STATE_FILE = Path(CFG["paths"]["state_file"])
 
-WRITE_IDENTITY = get_security()["write_identity"]   # "bot" 推荐 / "user"
+WRITE_IDENTITY = get_security()["write_identity"]   # khuyến nghị "bot" / "user"
 
 KANBAN_ID_RE = re.compile(r"\bt_[0-9a-f]{8}\b")
 HM  = datetime.now().strftime("%H:%M")
@@ -114,10 +114,10 @@ def extract_chain_ids(chain_text):
 
 
 def get_active_kanban_id(rec):
-    chain = normalize_text(rec.get("Kanban链"))
+    chain = normalize_text(rec.get("Chuỗi Kanban"))
     ids = extract_chain_ids(chain)
     if ids: return ids[-1]
-    detail = normalize_text(rec.get("任务详情"))
+    detail = normalize_text(rec.get("Chi tiết task"))
     ids = extract_chain_ids(detail)
     if ids: return ids[-1]
     return None
@@ -178,8 +178,8 @@ def main():
                 elif isinstance(result, str):
                     summary = result
 
-                # hermes v1 兼容：`kanban list --json` 的 result 常为 null，
-                # 真正的总结在 `kanban show` 的 latest_summary / result 里。
+                # Tương thích hermes v1: result trong `kanban list --json` thường null,
+                # summary thật nằm ở latest_summary / result của `kanban show`.
                 if not summary or not meta:
                     full = show_kanban_task(kid)
                     if isinstance(full, dict):
@@ -192,14 +192,14 @@ def main():
                         summary = summary or (full.get("latest_summary") or "")
 
                 is_revision = bool(meta.get("is_revision"))
-                digest = summary[:1500] if summary else f"kanban {kid} 已完成"
+                digest = summary[:1500] if summary else f"kanban {kid} Đã hoàn thành"
 
                 updates = {
-                    "进展":         "已完成",
-                    "实际完成时间": NOW + ":00",
-                    "最新进展记录": f"[{HM}] kanban {kid} 已完成",
-                    "任务情况总结": digest,
-                    "复核状态":     "已修正" if is_revision else "待复核",
+                    "Tiến độ":         "Đã hoàn thành",
+                    "Thời gian hoàn thành": NOW + ":00",
+                    "Nhật ký tiến độ": f"[{HM}] kanban {kid} Đã hoàn thành",
+                    "Tóm tắt task": digest,
+                    "Trạng thái duyệt":     "Đã sửa" if is_revision else "Chờ duyệt",
                 }
 
                 url = (meta.get("deliverable_url") or
@@ -209,34 +209,34 @@ def main():
                     m = re.search(r"https?://[^\s)]*feishu\.cn/docx/\S+", summary)
                     if m: url = m.group(0).rstrip(").,;")
                 if url:
-                    updates["交付内容"] = url
-                    updates["最新进展记录"] += f"，交付物 {url}"
+                    updates["Nội dung giao"] = url
+                    updates["Nhật ký tiến độ"] += f"，giao phẩm {url}"
 
                 notes = meta.get("self_check_notes") or ""
                 if notes:
-                    updates["自检备注"] = notes[:2000]
+                    updates["Ghi chú tự kiểm"] = notes[:2000]
                 elif meta.get("self_check_passed") is None:
-                    updates["自检备注"] = "(worker 未提交 self_check_notes)"
+                    updates["Ghi chú tự kiểm"] = "(worker chưa nộp ghi chú tự kiểm)"
 
-                chain_text = normalize_text(rec.get("Kanban链"))
+                chain_text = normalize_text(rec.get("Chuỗi Kanban"))
                 new_chain  = update_chain_after_complete(chain_text, kid, is_revision)
                 if new_chain != chain_text:
-                    updates["Kanban链"] = new_chain
+                    updates["Chuỗi Kanban"] = new_chain
 
             elif kstatus == "blocked":
                 updates = {
-                    "进展": "已停滞",
-                    "最新进展记录": f"[{HM}] kanban {kid} 被 worker 标记 blocked，需人工介入",
+                    "Tiến độ": "Đình trệ",
+                    "Nhật ký tiến độ": f"[{HM}] kanban {kid} bị worker đánh dấu blocked, cần người xử lý",
                 }
             elif kstatus == "running" and prev_kstatus in ("ready", "todo", ""):
                 updates = {
-                    "最新进展记录": f"[{HM}] worker 已 spawn,任务进入运行",
+                    "Nhật ký tiến độ": f"[{HM}] worker đã spawn, task bắt đầu chạy",
                 }
 
             if updates:
                 update_feishu(rid, updates)
 
-        # QA comment 检测
+        # phát hiện comment QA
         prev_qa  = prev.get("qa_count", 0)
         full     = show_kanban_task(kid)
         comments = (full.get("comments") or []) if isinstance(full, dict) else []
@@ -251,19 +251,19 @@ def main():
 
         if len(qa) > prev_qa:
             new_qa = qa[prev_qa:]
-            log_lines = [normalize_text(rec.get("澄清记录"))] if normalize_text(rec.get("澄清记录")) else []
+            log_lines = [normalize_text(rec.get("Nhật ký làm rõ"))] if normalize_text(rec.get("Nhật ký làm rõ")) else []
             for kind, content, author in new_qa:
                 line = f"[{HM}] {'Q' if kind=='Q' else 'A'}({author}):{content}"
                 log_lines.append(line)
 
-            clarify_updates = {"澄清记录": "\n".join(log_lines)[:5000]}
-            cur_clarify = normalize_select(rec.get("澄清状态"))
+            clarify_updates = {"Nhật ký làm rõ": "\n".join(log_lines)[:5000]}
+            cur_clarify = normalize_select(rec.get("Trạng thái làm rõ"))
             has_new_Q = any(k == "Q" for k, _, _ in new_qa)
             has_new_A = any(k == "A" for k, _, _ in new_qa)
             if has_new_Q:
-                clarify_updates["澄清状态"] = "待澄清"
-            elif has_new_A and cur_clarify == "待澄清":
-                clarify_updates["澄清状态"] = "已澄清"
+                clarify_updates["Trạng thái làm rõ"] = "Chờ làm rõ"
+            elif has_new_A and cur_clarify == "Chờ làm rõ":
+                clarify_updates["Trạng thái làm rõ"] = "Đã làm rõ"
 
             if clarify_updates:
                 update_feishu(rid, clarify_updates)

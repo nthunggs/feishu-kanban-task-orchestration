@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-飞书任务表事件监听器（real-time）
+Bộ lắng nghe sự kiện bảng task Lark (real-time)
 
-读取 stdin（lark-cli event +subscribe 的输出），逐行解析 NDJSON 事件。
-对 drive.file.bitable_record_changed_v1 事件：
-- 拉取完整 record（人类可读字段名）
-- 通过 IM 发送飞书 DM 通知
+Đọc stdin (output của lark-cli event consume), parse từng dòng NDJSON.
+Với sự kiện drive.file.bitable_record_changed_v1:
+- Lấy record đầy đủ (tên cột người đọc được)
+- Gửi thông báo DM qua IM
 
-由 base_watch_supervisor.py 在 tmux 内启动，作为 lark-cli 的下游 pipe。
-所有 base_token / table_id / chat_id 从 config.yaml 读取。
+Do base_watch_supervisor.py khởi động trong tmux, là pipe nhận output lark-cli.
+Tất cả base_token / table_id / chat_id đọc từ config.yaml.
 """
 
 import sys
@@ -28,8 +28,8 @@ SEEN_FILE   = Path(CFG["paths"]["seen_file"])
 ENV         = env_with_overrides()
 
 SEC               = get_security()
-WRITE_IDENTITY    = SEC["write_identity"]        # "bot" 推荐 / "user"
-ALLOWED_OPERATORS = set(SEC["allowed_operators"]) # 空 = 不限制（仅告警）
+WRITE_IDENTITY    = SEC["write_identity"]        # khuyến nghị "bot" / "user"
+ALLOWED_OPERATORS = set(SEC["allowed_operators"]) # rỗng = không giới hạn (chỉ cảnh báo)
 
 
 def log(msg):
@@ -51,7 +51,7 @@ def lark_api(method, path, params=None, data=None, identity="bot", timeout=15):
 
 
 def normalize(v):
-    """把字段值（select / user / link / text）规范成单行字符串"""
+    """Chuẩn hóa giá trị cột (select/user/link/text) thành chuỗi 1 dòng"""
     if v is None:
         return ""
     if isinstance(v, list) and v:
@@ -65,7 +65,7 @@ def normalize(v):
 
 
 def fetch_record(record_id):
-    """拉单条记录的完整字段（带字段名）"""
+    """Lấy đầy đủ các cột của 1 record (kèm tên cột)"""
     r = lark_api("GET",
                  f"/open-apis/bitable/v1/apps/{BASE_TOKEN}/tables/{TABLE_ID}/records/{record_id}",
                  identity="bot")
@@ -75,9 +75,9 @@ def fetch_record(record_id):
 
 
 def summarize(fields):
-    title  = normalize(fields.get("任务描述")) or normalize(fields.get("任务详情")) or "(无标题)"
-    status = normalize(fields.get("进展")) or normalize(fields.get("复核状态")) or ""
-    person = normalize(fields.get("负责人")) or normalize(fields.get("管理者")) or ""
+    title  = normalize(fields.get("Mô tả task")) or normalize(fields.get("Chi tiết task")) or "(Không tiêu đề)"
+    status = normalize(fields.get("Tiến độ")) or normalize(fields.get("Trạng thái duyệt")) or ""
+    person = normalize(fields.get("Phụ trách")) or normalize(fields.get("Quản lý")) or ""
     return title[:60], status, person
 
 
@@ -111,7 +111,7 @@ def save_seen(seen):
 
 
 def changed_field_names(action):
-    """从 action 的 before/after 提取变更字段 ID"""
+    """Trích field ID đã đổi từ before/after của action"""
     before = {f["field_id"]: f.get("field_value", "") for f in action.get("before_value", [])}
     after  = {f["field_id"]: f.get("field_value", "") for f in action.get("after_value", [])}
     return [fid for fid in after if before.get(fid) != after.get(fid)]
@@ -128,8 +128,8 @@ def handle_event(ev):
 
     operator = body.get("operator_id", {}).get("user_id", "?")
 
-    # 安全门：operator 不在白名单 → 只记日志，不通知 orchestrator、不触发 spawn。
-    # 防「任意人在表里打字注入指令」。空白名单 = 不限制（兼容初始调试）。
+    # Cổng an toàn: operator ngoài whitelist → chỉ ghi log, không báo orchestrator, không spawn.
+    # Chặn 'ai cũng gõ lệnh vào bảng để inject'. Whitelist rỗng = không giới hạn (để debug ban đầu).
     if ALLOWED_OPERATORS and operator not in ALLOWED_OPERATORS:
         log(f"⚠️ blocked: operator {operator} not in allowed_operators; ignoring event")
         return None
@@ -143,7 +143,7 @@ def handle_event(ev):
         title, status, person = summarize(fields)
 
         if action == "record_added":
-            line = f"➕ 新任务：{title}"
+            line = f"➕ Task mới：{title}"
             if person:
                 line += f"({person})"
             lines.append(line)
@@ -154,15 +154,15 @@ def handle_event(ev):
             if status:
                 line += f" → {status}"
             if changed:
-                line += f"  [{len(changed)}个字段]"
+                line += f"  [{len(changed)} cột]"
             lines.append(line)
 
         elif action == "record_deleted":
-            lines.append(f"🗑️ 删除：{rid}")
+            lines.append(f"🗑️ Xóa：{rid}")
 
     if not lines:
         return None
-    return f"📋 任务表变更({operator})\n" + "\n".join(lines)
+    return f"📋 Bảng task thay đổi({operator})\n" + "\n".join(lines)
 
 
 def main():

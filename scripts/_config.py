@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-配置加载器（所有脚本共用）
+Bộ nạp cấu hình (dùng chung cho mọi script)
 
-按优先级查找 config.yaml：
-1. 环境变量 FKTO_CONFIG 指向的路径
-2. 当前脚本同目录的 ../config.yaml
+Tìm config.yaml theo thứ tự ưu tiên:
+1. Đường dẫn trỏ bởi biến môi trường FKTO_CONFIG
+2. ../config.yaml cùng thư mục script
 3. ~/.hermes/feishu-kanban-task-orchestration/config.yaml
 4. /etc/feishu-kanban-task-orchestration/config.yaml
 
-如果都没有，退回到 config.example.yaml（占位值会让脚本 no-op，避免误操作）。
+Nếu không có, lùi về config.example.yaml (giá trị placeholder khiến script no-op, tránh thao tác nhầm).
 """
 
 import os
@@ -18,7 +18,7 @@ from pathlib import Path
 try:
     import yaml  # PyYAML
 except ImportError:
-    print("[_config] 缺 PyYAML，跑 `pip install pyyaml`", file=sys.stderr)
+    print("[_config] thiếu PyYAML, chạy `pip install pyyaml`", file=sys.stderr)
     raise
 
 
@@ -33,15 +33,15 @@ def _candidate_paths():
     candidates.append(here.parent / "config.yaml")
     candidates.append(Path("~/.hermes/feishu-kanban-task-orchestration/config.yaml").expanduser())
     candidates.append(Path("/etc/feishu-kanban-task-orchestration/config.yaml"))
-    candidates.append(here.parent / "config.example.yaml")  # 兜底
+    candidates.append(here.parent / "config.example.yaml")  # dự phòng
     return candidates
 
 
 def _expand_paths(cfg):
-    """把 paths 段里的 ~ 和环境变量展开成绝对路径（macOS 适配）。
+    """Mở rộng ~ và biến môi trường trong mục paths thành đường dẫn tuyệt đối (cho macOS).
 
-    原始脚本直接 Path(cfg["paths"][...]) 不会展开 ~，在 macOS 上会
-    生成字面量 './~/...' 目录。这里集中处理一次。
+    Script gốc gọi Path(cfg["paths"][...]) trực tiếp không mở rộng ~, trên macOS sẽ
+    tạo thư mục literal './~/...'. Xử lý tập trung tại đây một lần.
     """
     paths = cfg.get("paths")
     if isinstance(paths, dict):
@@ -62,11 +62,11 @@ def load_config():
             _CACHE["_loaded_from"] = str(p)
             _expand_paths(_CACHE)
             return _CACHE
-    raise FileNotFoundError("config.yaml not found; 复制 config.example.yaml -> config.yaml 后再跑")
+    raise FileNotFoundError("config.yaml not found; copy config.example.yaml -> config.yaml rồi chạy lại")
 
 
 def env_with_overrides():
-    """返回带 config.env 的环境字典，子进程用这个 env 跑"""
+    """Trả về dict env kèm config.env để tiến trình con dùng"""
     cfg = load_config()
     env = dict(os.environ)
     for k, v in (cfg.get("env") or {}).items():
@@ -75,7 +75,7 @@ def env_with_overrides():
 
 
 def get_security():
-    """读取 security 段，带安全默认值（缺省时偏向最严格）。"""
+    """Đọc mục security, có giá trị mặc định an toàn nhất khi thiếu."""
     cfg = load_config()
     sec = cfg.get("security") or {}
     return {

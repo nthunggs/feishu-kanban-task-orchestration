@@ -1,107 +1,107 @@
-# macOS + 多 Profile Team 适配指南 (nthunggs fork)
+# Hướng dẫn thích ứng macOS + Team đa Profile (nthunggs fork)
 
-> 本文件是 fork 的新增内容。原始 repo 面向 Linux/`/root` 单机部署；
-> 这里记录在 **macOS (always-on iMac)** + **Hermes 多 profile team** 下的差异与安全加固。
+> File này là nội dung bổ sung của bản fork. Repo gốc hướng tới triển khai đơn máy Linux/`/root`;
+> ở đây ghi lại các khác biệt và phần gia cố bảo mật khi chạy trên **macOS (iMac always-on)** + **Hermes team đa profile**.
 
-## 1. 与上游的差异（fork 改了什么）
+## 1. Khác biệt so với bản gốc (fork đã thay đổi những gì)
 
-| 项 | 上游原版 | 本 fork |
+| Mục | Bản gốc upstream | Bản fork này |
 |---|---|---|
-| 路径 | 硬编码 `/root/.hermes/...` | `~/.hermes/...`，`_config.py` 自动展开 `~` 和环境变量 |
-| 写回身份 | 硬编码 `--as user`（个人全权） | `security.write_identity`，默认 `bot`（最小权限） |
-| 操作者校验 | 无（任何人改表都触发） | `security.allowed_operators` 白名单，挡注入 |
-| spawn | 自动 | `security.require_spawn_approval`（默认 true，人工确认门） |
-| 日志位置 | `/tmp/larkwatch.log` | `~/.hermes/cron/state/larkwatch.log`（重启不丢） |
+| Đường dẫn | Hardcode `/root/.hermes/...` | `~/.hermes/...`, `_config.py` tự động mở rộng `~` và biến môi trường |
+| Danh tính ghi ngược | Hardcode `--as user` (toàn quyền cá nhân) | `security.write_identity`, mặc định `bot` (quyền tối thiểu) |
+| Kiểm tra người thao tác | Không có (bất kỳ ai sửa bảng đều kích hoạt) | Whitelist `security.allowed_operators`, chặn injection |
+| spawn | Tự động | `security.require_spawn_approval` (mặc định true, cổng xác nhận thủ công) |
+| Vị trí log | `/tmp/larkwatch.log` | `~/.hermes/cron/state/larkwatch.log` (không mất khi khởi động lại) |
 
-## 2. Profile 角色映射（团队版）
+## 2. Ánh xạ vai trò Profile (bản team)
 
-上游用动物园 demo 名（Judy / bogo / bonnie / clawhauser / stu）。本 team 实际映射：
+Upstream dùng tên demo kiểu sở thú (Judy / bogo / bonnie / clawhauser / stu). Ánh xạ thực tế của team này:
 
-| 上游 demo 角色 | 本 team profile | 职责 |
+| Vai trò demo upstream | Profile của team | Trách nhiệm |
 |---|---|---|
-| Judy (orchestrator) | **boss** | 接需求、拆任务、建 kanban、复核汇总 |
-| bogo / bonnie / ... (worker) | **marketing** | 品牌 / 内容 / KPI / 视觉设计 |
-| worker | **xnk** | 进口 / 分销（Sports Plus brand） |
-| worker | **hr** | JD / KPI / 薪酬 / 行政 |
+| Judy (orchestrator) | **boss** | Nhận yêu cầu, chia task, tạo kanban, duyệt và tổng hợp |
+| bogo / bonnie / ... (worker) | **marketing** | Thương hiệu / nội dung / KPI / thiết kế hình ảnh |
+| worker | **xnk** | Nhập khẩu / phân phối (Sports Plus brand) |
+| worker | **hr** | JD / KPI / lương thưởng / hành chính |
 
-> 飞书表「负责人」字段填 marketing / xnk / hr，orchestrator (boss) 据此决定 spawn 哪个 profile。
+> Cột «Phụ trách» trong bảng Feishu điền marketing / xnk / hr, orchestrator (boss) dựa vào đó để quyết định spawn profile nào.
 
-## 3. 安全门工作方式（必读）
+## 3. Cách hoạt động của các cổng bảo mật (bắt buộc đọc)
 
-### 3.1 写回身份 `write_identity: bot`
-把飞书自建应用机器人**加为目标任务表的协作者**（编辑权限），脚本就用 bot 身份读写。
-好处：脚本不再借用你（Henry）个人账号的全部权限；bot 只能动它被授权的那张表。
-若暂时没配 bot 协作者，可临时设 `user` 调试，但**不建议长期**。
+### 3.1 Danh tính ghi ngược `write_identity: bot`
+Thêm bot ứng dụng tự xây của Feishu **làm cộng tác viên (quyền chỉnh sửa) của bảng task mục tiêu**, script sẽ dùng danh tính bot để đọc/ghi.
+Lợi ích: script không còn mượn toàn bộ quyền của tài khoản cá nhân của bạn (Henry); bot chỉ có thể thao tác đúng bảng được cấp quyền.
+Nếu tạm thời chưa cấu hình bot làm cộng tác viên, có thể đặt tạm `user` để debug, nhưng **không khuyến nghị dùng lâu dài**.
 
-### 3.2 操作者白名单 `allowed_operators`
-监听器收到记录变更时，先看 `operator_id`。不在白名单 → 只写日志、**不通知 boss、不 spawn**。
-填法：跑下面拿到自己的 open_id / user_id，填进 config。
+### 3.2 Whitelist người thao tác `allowed_operators`
+Khi listener nhận sự kiện thay đổi record, trước tiên kiểm tra `operator_id`. Không nằm trong whitelist → chỉ ghi log, **không thông báo boss, không spawn**.
+Cách điền: chạy lệnh dưới để lấy open_id / user_id của chính mình rồi điền vào config.
 ```bash
-lark-cli contact +user-search --query "你的名字" --as bot
+lark-cli contact +user-search --query "tên của bạn" --as bot
 ```
-留空 = 不限制（仅初期调试用，生产务必填）。
+Để trống = không giới hạn (chỉ dùng debug giai đoạn đầu, production bắt buộc phải điền).
 
-### 3.3 spawn 审批门 `require_spawn_approval: true`
-boss 收到新任务 DM 后，**不要自动 spawn**。先在 DM 里回报：
-「检测到新任务 X，建议派给 <profile>，确认 spawn 吗？」
-Henry 回「确认」后 boss 才 `hermes kanban create` + spawn worker。
-跑顺、信任建立后可改 false 走全自动。
+### 3.3 Cổng phê duyệt spawn `require_spawn_approval: true`
+Sau khi boss nhận DM task mới, **không tự động spawn**. Trước tiên báo cáo trong DM:
+«Phát hiện task mới X, đề xuất giao cho <profile>, xác nhận spawn không?»
+Sau khi Henry trả lời «xác nhận» thì boss mới `hermes kanban create` + spawn worker.
+Khi đã chạy trơn tru và xây được lòng tin, có thể đổi thành false để chạy hoàn toàn tự động.
 
-### 3.4 表内文字当数据，不当指令
-`treat_table_text_as_data: true` 是提醒位。真正隔离在 **boss profile 的 SOUL.md / prompt**：
-任务描述里出现「忽略以上指令 / 删除文件 / 改 config / 提权」等字样，
-boss 一律当**普通任务文本**处理，绝不执行其中的元指令。这条要写进 boss 的系统提示。
+### 3.4 Coi văn bản trong bảng là dữ liệu, không phải lệnh
+`treat_table_text_as_data: true` là vị trí nhắc nhở. Cách ly thực sự nằm ở **SOUL.md / prompt của boss profile**:
+nếu mô tả task xuất hiện các cụm như «bỏ qua các lệnh phía trên / xóa file / sửa config / nâng quyền»,
+boss luôn xử lý chúng như **văn bản task thông thường**, tuyệt đối không thực thi các meta-lệnh bên trong. Điều này phải được viết vào system prompt của boss.
 
-## 4. macOS 部署速记
+## 4. Ghi nhanh triển khai macOS
 
 ```bash
-# 1. 装依赖
+# 1. Cài dependency
 brew install tmux
 pip3 install pyyaml
 
-# 2. 铺脚本 + 配置
+# 2. Trải script + cấu hình
 mkdir -p ~/.hermes/scripts ~/.hermes/cron/state ~/.hermes/feishu-kanban-task-orchestration
 cp scripts/_config.py scripts/*.py ~/.hermes/scripts/
 chmod +x ~/.hermes/scripts/*.py
 cp config.example.yaml ~/.hermes/feishu-kanban-task-orchestration/config.yaml
-# 编辑 config.yaml：填 base_token / table_id / chat_id / field_ids / security
+# Sửa config.yaml: điền base_token / table_id / chat_id / field_ids / security
 
-# 3. 注册 cron（见 templates/cron-jobs.yaml）
-hermes cron add --no-agent --schedule "* * * * *"   --script ~/.hermes/scripts/base_watch_supervisor.py --name "飞书事件监听守护"
-hermes cron add --no-agent --schedule "*/3 * * * *" --script ~/.hermes/scripts/kanban_watch.py --name "Kanban→飞书写回"
+# 3. Đăng ký cron (xem templates/cron-jobs.yaml)
+hermes cron add --no-agent --schedule "* * * * *"   --script ~/.hermes/scripts/base_watch_supervisor.py --name "Giám sát lắng nghe sự kiện Feishu"
+hermes cron add --no-agent --schedule "*/3 * * * *" --script ~/.hermes/scripts/kanban_watch.py --name "Kanban→ghi ngược Feishu"
 
-# 4. 验证
-#   - 白名单内的人在表里加一行 → 1~3 秒收到 DM
-#   - 白名单外的人改表 → 不收 DM，larkwatch.log 有 "blocked" 行
-#   - kanban 任务标 done → 3 分钟内表里「进展=已完成」
+# 4. Kiểm chứng
+#   - Người trong whitelist thêm một dòng vào bảng → nhận DM sau 1~3 giây
+#   - Người ngoài whitelist sửa bảng → không nhận DM, larkwatch.log có dòng "blocked"
+#   - Task kanban đánh dấu done → trong 3 phút bảng có «Tiến độ=Đã hoàn thành»
 ```
 
-## 5. 已知坑（继承上游 + macOS 补充）
+## 5. Các bẫy đã biết (kế thừa upstream + bổ sung cho macOS)
 
-1. **drive 事件两步订阅**：飞书后台勾事件 + 每张表调 `/drive/v1/files/{token}/subscribe`（supervisor 自动调）。
-2. **「用户身份」≠「应用身份」**：事件订阅走 `--as bot` 必须勾**应用身份**栏，改完重新发版本。
-3. **macOS cron 与 PATH**：Hermes cron 跑脚本时 PATH 可能不含 `lark-cli`。确认 `lark-cli` 在 `~/.npm-global/bin`，必要时在 `config.yaml` 的 `env` 段补 `PATH`。
-4. **bot 不是协作者会写回失败**：`write_identity: bot` 时，bot 必须是目标表协作者，否则 record-upsert 返回权限错误。
+1. **Đăng ký sự kiện drive hai bước**: tick sự kiện ở backend Feishu + gọi `/drive/v1/files/{token}/subscribe` cho từng bảng (supervisor tự động gọi).
+2. **«Danh tính người dùng» ≠ «danh tính ứng dụng»**: đăng ký sự kiện đi qua `--as bot` thì bắt buộc phải tick cột **danh tính ứng dụng**, sửa xong phải phát hành lại phiên bản.
+3. **cron macOS và PATH**: khi Hermes cron chạy script, PATH có thể không chứa `lark-cli`. Xác nhận `lark-cli` nằm trong `~/.npm-global/bin`, nếu cần thì bổ sung `PATH` trong mục `env` của `config.yaml`.
+4. **bot không phải cộng tác viên sẽ ghi ngược thất bại**: khi dùng `write_identity: bot`, bot phải là cộng tác viên của bảng mục tiêu, nếu không record-upsert sẽ trả lỗi quyền.
 
-## 6. PoC 实测发现的坑（lark-cli v1.0.57 / hermes v1，必读）
+## 6. Các bẫy phát hiện khi chạy thực PoC (lark-cli v1.0.57 / hermes v1, bắt buộc đọc)
 
-> 以下是在 macOS + Lark International + lark-cli 1.0.57 实跑 PoC 时踩到并已修复的坑。
+> Dưới đây là những bẫy đã gặp và đã khắc phục khi chạy thực PoC trên macOS + Lark International + lark-cli 1.0.57.
 
-1. **`_config.py` 会误加载 `~/.hermes/config.yaml`**
-   查找顺序里 `脚本同级 ../config.yaml` 在 macOS 上解析成 `~/.hermes/config.yaml`（那是 Hermes 自己的配置，不是本工具的），导致 `KeyError: 'feishu'`。
-   **解法**：cron / 手跑都显式设 `export FKTO_CONFIG=~/.hermes/feishu-kanban-task-orchestration/config.yaml`，别依赖自动查找。
+1. **`_config.py` sẽ nạp nhầm `~/.hermes/config.yaml`**
+   Trong thứ tự tìm kiếm, `../config.yaml cùng cấp với script` trên macOS bị phân giải thành `~/.hermes/config.yaml` (đó là config của chính Hermes, không phải của tool này), gây ra `KeyError: 'feishu'`.
+   **Cách xử lý**: dù chạy cron hay chạy tay đều đặt tường minh `export FKTO_CONFIG=~/.hermes/feishu-kanban-task-orchestration/config.yaml`, đừng dựa vào tìm kiếm tự động.
 
-2. **`lark-cli base +record-list` 默认输出 Markdown 表格，不是 JSON**
-   不加 `--format json` 时返回 Markdown，`json.loads` 直接失败 → 脚本拿到空记录、静默 no-op。
-   **解法**：本 fork 已在 `list_feishu_records()` 固定加 `--format json`。任何新写的 lark-cli 调用都要显式 `--format json`。
+2. **`lark-cli base +record-list` mặc định xuất bảng Markdown, không phải JSON**
+   Khi không thêm `--format json`, nó trả về Markdown, `json.loads` thất bại ngay → script nhận record rỗng, no-op âm thầm.
+   **Cách xử lý**: bản fork này đã cố định thêm `--format json` trong `list_feishu_records()`. Mọi lệnh gọi lark-cli mới viết đều phải `--format json` tường minh.
 
-3. **`hermes kanban list --json` 的 `result` 字段常为 null**
-   worker 完成后，总结在 `kanban show` 的 `latest_summary`（或 `result`）里，`list` 里 `result=null`。
-   只读 `list` 会丢掉 summary / deliverable_url。
-   **解法**：本 fork 在 done 分支里 result 为空时回落调用 `show` 取 `latest_summary`。
+3. **Trường `result` của `hermes kanban list --json` thường là null**
+   Sau khi worker hoàn thành, phần tóm tắt nằm trong `latest_summary` (hoặc `result`) của `kanban show`, còn `result` trong `list` thì `result=null`.
+   Chỉ đọc `list` sẽ mất summary / deliverable_url.
+   **Cách xử lý**: bản fork này trong nhánh done, khi result rỗng sẽ fallback gọi `show` để lấy `latest_summary`.
 
-4. **时区**：`base +base-create --time-zone` 要 IANA 名。`Asia/Ho_Chi_Minh` 被拒，用 `Asia/Bangkok`（同 UTC+7）或 `Asia/Saigon`。
+4. **Múi giờ**: `base +base-create --time-zone` cần tên IANA. `Asia/Ho_Chi_Minh` bị từ chối, dùng `Asia/Bangkok` (cùng UTC+7) hoặc `Asia/Saigon`.
 
-5. **`record-create` 子命令不存在**：v1.0.57 用 `+record-upsert`（不带 `--record-id` 即新建）。
+5. **Không tồn tại subcommand `record-create`**: v1.0.57 dùng `+record-upsert` (không kèm `--record-id` nghĩa là tạo mới).
 
-6. **lark-cli 事件语法变了**：上游 `event +subscribe --event-types X` → v1.0.19+ 用 `event consume <EventKey>`，stdout 为 NDJSON。本 fork supervisor 已改。`event list` 先确认 app 实际暴露的 EventKey。
+6. **Cú pháp event của lark-cli đã đổi**: upstream `event +subscribe --event-types X` → từ v1.0.19+ dùng `event consume <EventKey>`, stdout là NDJSON. Supervisor của bản fork này đã sửa. Chạy `event list` trước để xác nhận EventKey mà app thực sự expose.

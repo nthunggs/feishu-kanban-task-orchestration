@@ -1,31 +1,31 @@
-# Hermes cronjob 定义清单
+# Danh sách định nghĩa cronjob của Hermes
 #
-# 按下面的命令在你机器上注册：
+# Đăng ký trên máy của bạn bằng lệnh dưới đây:
 #   hermes cron add ...
-# 或在 hermes UI 里手工创建。
+# Hoặc tạo thủ công trong hermes UI.
 #
-# 两个 job 都用 no_agent=true（无 LLM 消耗），失败/有变化时才输出。
+# Cả hai job đều dùng no_agent=true (không tốn LLM), chỉ xuất output khi lỗi/có thay đổi.
 
 jobs:
-  - name: 飞书事件监听守护(tmux 保活)
-    schedule: "* * * * *"           # 每 60 秒
+  - name: Giám sát lắng nghe sự kiện Feishu (giữ tmux sống)
+    schedule: "* * * * *"           # mỗi 60 giây
     no_agent: true
     script: ~/.hermes/scripts/base_watch_supervisor.py
     description: |
-      检查 tmux session 是否存在；不存在就拉起 lark-cli event +subscribe
-      pipe 到 base_event_listener.py。每次启动幂等地调一次 drive subscribe API。
+      Kiểm tra tmux session có tồn tại không; nếu không thì khởi động lark-cli event +subscribe
+      pipe vào base_event_listener.py. Mỗi lần khởi động gọi một lần drive subscribe API theo kiểu idempotent.
 
-  - name: Kanban → 飞书写回(3 分钟轮询)
-    schedule: "*/3 * * * *"         # 每 3 分钟
+  - name: Kanban → ghi ngược về Feishu (poll mỗi 3 phút)
+    schedule: "*/3 * * * *"         # mỗi 3 phút
     no_agent: true
     script: ~/.hermes/scripts/kanban_watch.py
     description: |
-      读取本地 hermes kanban 状态，对比上次状态 cache。
-      done/blocked/running 转换 → 写回飞书表对应字段；
-      [QUESTION]/[ANSWER] comment → 写澄清记录与澄清状态。
+      Đọc trạng thái hermes kanban cục bộ, so sánh với cache trạng thái lần trước.
+      Chuyển trạng thái done/blocked/running → ghi ngược về cột tương ứng trong bảng Feishu;
+      comment [QUESTION]/[ANSWER] → ghi vào Nhật ký làm rõ và Trạng thái làm rõ.
 
-# 注意事项：
-# 1. 第一个 job 要求 tmux 已安装、lark-cli 已 OAuth 完成。
-# 2. config.yaml 必须能被脚本找到（默认 ~/.hermes/feishu-kanban-task-orchestration/config.yaml
-#    或脚本同级 ../config.yaml；也可以 export FKTO_CONFIG=/path/to/config.yaml）。
-# 3. 第二个 job 跑前确保 hermes kanban list --tenant <你的 tenant> --json 能正常输出 JSON。
+# Lưu ý:
+# 1. Job đầu tiên yêu cầu tmux đã cài, lark-cli đã hoàn tất OAuth.
+# 2. config.yaml phải để script tìm được (mặc định ~/.hermes/feishu-kanban-task-orchestration/config.yaml
+#    hoặc ../config.yaml cùng cấp với script; cũng có thể export FKTO_CONFIG=/path/to/config.yaml).
+# 3. Trước khi chạy job thứ hai hãy đảm bảo hermes kanban list --tenant <tenant của bạn> --json xuất JSON bình thường.
